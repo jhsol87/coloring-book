@@ -243,12 +243,12 @@
 
             <div class="slider-group" title="값에 따라 자잘한 선을 생략하고 굵은 선만 남깁니다">
                 <span>도안 단순화</span>
-                <input type="range" id="simplifySlider" min="15" max="75" value="38">
+                <input type="range" id="simplifySlider" min="20" max="90" value="48">
             </div>
 
             <button class="btn active" id="modeFill">🪣 채우기</button>
             <button class="btn" id="modeBrush">🖌️ 브러시</button>
-            <button class="btn shield-on" id="btnBgLock" title="켜두면 캐릭터 바깥 배경엔 칠해지지 않아요">🛡️ 배경 보호 ON</button>
+            <button class="btn shield-on" id="btnBgLock" title="켜두면 배경 및 뚫린 빈 공간엔 칠해지지 않아요">🛡️ 배경 보호 ON</button>
             <button class="btn" id="btnUndo">↩️ 되돌리기</button>
             <button class="btn" id="btnClear">🗑️ 다 지우기</button>
             <button class="btn" id="btnSave">💾 저장</button>
@@ -311,7 +311,7 @@
         let historyStack = [];
 
         let closedEdgeMap = null;
-        let outsideMask = null;
+        let backgroundMask = null; // 바깥 배경 + 도넛처럼 뚫린 내부 빈 배경까지 모두 포함
 
         function initPalette() {
             colors.forEach((c, idx) => {
@@ -397,7 +397,9 @@
             saveHistory();
         }
 
-        // 핵심 개선: 컬러 경계 보존 스무딩 + RGB 벡터 Sobel 경계 검출 + 자잘한 점(노이즈) 제거 + 매끄러운 단선화
+        // 핵심 개선:
+        // 1) 원본 이미지의 투명(Alpha) 채널 및 외곽 배경색 샘플링으로 '도넛 구멍(가운데 빈 공간)'까지 완벽히 배경으로 분리
+        // 2) 강한 엣지 보존 스무딩 + 세선화(모폴로지 열림/닫힘) + 가우시안 블러 기반 매끄러운 벡터풍 선 렌더링
         function processLineArt() {
             const w = lineCanvas.width;
             const h = lineCanvas.height;
@@ -411,26 +413,26 @@
             const srcData = tCtx.getImageData(0, 0, w, h).data;
             const total = w * h;
 
-            // 1. 투명 영역 흰색 합성 후 RGB 버퍼 준비
             let rBuf = new Float32Array(total);
             let gBuf = new Float32Array(total);
             let bBuf = new Float32Array(total);
+            const alphaBuf = new Uint8Array(total);
 
             for (let i = 0; i < total; i++) {
                 const idx = i * 4;
+                alphaBuf[i] = srcData[idx + 3];
                 const alpha = srcData[idx + 3] / 255;
                 rBuf[i] = srcData[idx] * alpha + 255 * (1 - alpha);
                 gBuf[i] = srcData[idx + 1] * alpha + 255 * (1 - alpha);
                 bBuf[i] = srcData[idx + 2] * alpha + 255 * (1 - alpha);
             }
 
-            // 2. 간이 Bilateral Filter (색상이 비슷한 영역은 뭉개고, 색이 크게 다른 경계선은 날카롭게 보존)
-            // 이를 통해 입체 명암/그라데이션/자잘한 그림자를 제거해 컬러링북처럼 단순화함
-            for (let pass = 0; pass < 2; pass++) {
+            // 1. 3단계 엣지 보존 스무딩 (캐릭터 내부 무늬·그림자·거친 질감 뭉개기)
+            for (let pass = 0; pass < 3; pass++) {
                 const nextR = new Float32Array(total);
                 const nextG = new Float32Array(total);
                 const nextB = new Float32Array(total);
-                const colorSigma = 45; // 색상 차이 허용치
+                const colorSigma = 55;
 
                 for (let y = 0; y < h; y++) {
                     for (let x = 0; x < w; x++) {
@@ -467,15 +469,13 @@
                 rBuf = nextR; gBuf = nextG; bBuf = nextB;
             }
 
-            // 3. RGB 멀티채널 Sobel 필터 (빨간 동체와 흰 배처럼 밝기가 비슷해도 색상이 다르면 정확히 선 추출)
-            const edgeThreshold = parseInt(simplifySlider.value, 10) * 3.2;
+            // 2. RGB 벡터 Sobel 필터로 주요 윤곽선 추출
+            const edgeThreshold = parseInt(simplifySlider.value, 10) * 3.5;
             const rawBinary = new Uint8Array(total);
 
             for (let y = 1; y < h - 1; y++) {
                 for (let x = 1; x < w - 1; x++) {
                     const pos = y * w + x;
-
-                    // 각 채널별 X, Y 방향 기울기(Gradient) 계산
                     const channels = [rBuf, gBuf, bBuf];
                     let maxGrad = 0;
 
@@ -491,19 +491,18 @@
                         if (grad > maxGrad) maxGrad = grad;
                     }
 
-                    // 원래 아주 어두운 검은 윤곽선(눈동자, 기존 검은 테두리)도 함께 보존
                     const lum = 0.299 * rBuf[pos] + 0.587 * gBuf[pos] + 0.114 * bBuf[pos];
-                    if (maxGrad > edgeThreshold || lum < 65) {
+                    if (maxGrad > edgeThreshold || lum < 55) {
                         rawBinary[pos] = 1;
                     }
                 }
             }
 
-            // 4. 연결 요소(Connected Component) 분석으로 25픽셀 미만의 자잘한 잡티·점(노이즈) 제거
+            // 3. 자잘한 내부 잡티(45픽셀 미만 연결 성분) 강력 제거
             const visited = new Uint8Array(total);
             const cleanBinary = new Uint8Array(total);
             const compQueue = new Int32Array(total);
-            const minComponentSize = 25;
+            const minComponentSize = 45;
 
             for (let i = 0; i < total; i++) {
                 if (rawBinary[i] === 1 && visited[i] === 0) {
@@ -531,7 +530,6 @@
                         }
                     }
 
-                    // 일정 크기 이상의 의미 있는 선 덩어리만 유지
                     if (tail >= minComponentSize) {
                         for (let k = 0; k < tail; k++) {
                             cleanBinary[compQueue[k]] = 1;
@@ -540,71 +538,75 @@
                 }
             }
 
-            // 5. 형태학적 닫힘(Closing: 팽창 후 침식)으로 끊어진 선을 부드럽게 연결하고 두께 균일화
-            const dilated = new Uint8Array(total);
-            for (let y = 1; y < h - 1; y++) {
-                for (let x = 1; x < w - 1; x++) {
-                    const pos = y * w + x;
-                    if (cleanBinary[pos] === 1) {
-                        for (let dy = -1; dy <= 1; dy++) {
-                            for (let dx = -1; dx <= 1; dx++) {
-                                dilated[(y + dy) * w + (x + dx)] = 1;
-                            }
+            // 4. 매끄러운 곡선화(Smoothing): 이진 선을 블러 처리 후 재임계화(Thresholding)하면 거친 톱니가 둥글고 매끈한 잉크 선으로 변함
+            const lineFloat = new Float32Array(total);
+            for (let i = 0; i < total; i++) lineFloat[i] = cleanBinary[i] ? 255 : 0;
+
+            const smoothLine = new Float32Array(total);
+            const blurR = 2;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    let sum = 0, cnt = 0;
+                    for (let dy = -blurR; dy <= blurR; dy++) {
+                        const ny = y + dy;
+                        if (ny < 0 || ny >= h) continue;
+                        for (let dx = -blurR; dx <= blurR; dx++) {
+                            const nx = x + dx;
+                            if (nx < 0 || nx >= w) continue;
+                            sum += lineFloat[ny * w + nx];
+                            cnt++;
                         }
                     }
+                    smoothLine[y * w + x] = sum / cnt;
                 }
             }
 
-            // 화면에 그릴 깔끔한 안티앨리어싱 선 이미지 생성
+            // 매끄러운 안티앨리어싱 선 이미지 출력 및 채우기 경계 맵 생성
             const outImg = lineCtx.createImageData(w, h);
             const out = outImg.data;
-            closedEdgeMap = dilated;
+            closedEdgeMap = new Uint8Array(total);
 
-            for (let y = 0; y < h; y++) {
-                for (let x = 0; x < w; x++) {
-                    const pos = y * w + x;
-                    const idx = pos * 4;
-                    if (dilated[pos] === 1) {
-                        out[idx] = 28;
-                        out[idx + 1] = 28;
-                        out[idx + 2] = 30;
-                        out[idx + 3] = 255;
-                    } else {
-                        // 선 바로 옆 1픽셀에 반투명 안티앨리어싱을 주어 계단 현상 완화
-                        let nearEdge = 0;
-                        if (x > 0 && dilated[pos - 1]) nearEdge++;
-                        if (x < w - 1 && dilated[pos + 1]) nearEdge++;
-                        if (y > 0 && dilated[pos - w]) nearEdge++;
-                        if (y < h - 1 && dilated[pos + w]) nearEdge++;
-
-                        if (nearEdge > 0) {
-                            out[idx] = 28;
-                            out[idx + 1] = 28;
-                            out[idx + 2] = 30;
-                            out[idx + 3] = nearEdge * 45;
-                        } else {
-                            out[idx + 3] = 0;
-                        }
-                    }
+            for (let i = 0; i < total; i++) {
+                const v = smoothLine[i];
+                const idx = i * 4;
+                if (v >= 95) {
+                    // 선 중심부 (매끈하고 짙은 검정)
+                    out[idx] = 25;
+                    out[idx + 1] = 25;
+                    out[idx + 2] = 28;
+                    out[idx + 3] = 255;
+                    closedEdgeMap[i] = 1;
+                } else if (v > 30) {
+                    // 선 가장자리 부드러운 안티앨리어싱
+                    const alpha = Math.round(((v - 30) / 65) * 255);
+                    out[idx] = 25;
+                    out[idx + 1] = 25;
+                    out[idx + 2] = 28;
+                    out[idx + 3] = alpha;
+                    if (v >= 65) closedEdgeMap[i] = 1;
+                } else {
+                    out[idx + 3] = 0;
                 }
             }
             lineCtx.putImageData(outImg, 0, 0);
 
-            // 6. 바깥 배경 마스크 계산 (외곽 테두리에서 시작)
-            outsideMask = new Uint8Array(total);
+            // 5. 바깥 배경 + 레쿠쟈 몸통 고리 가운데처럼 '뚫린 배경(도넛 구멍)'까지 모두 배경으로 인식하기
+            backgroundMask = new Uint8Array(total);
+
+            // (A) 먼저 캔버스 외곽 테두리에서 연결된 바깥 배경 탐색
             const queue = new Int32Array(total);
             let head = 0, tail = 0;
 
             for (let x = 0; x < w; x++) {
-                if (closedEdgeMap[x] === 0) { outsideMask[x] = 1; queue[tail++] = x; }
+                if (closedEdgeMap[x] === 0) { backgroundMask[x] = 1; queue[tail++] = x; }
                 const bottom = (h - 1) * w + x;
-                if (closedEdgeMap[bottom] === 0) { outsideMask[bottom] = 1; queue[tail++] = bottom; }
+                if (closedEdgeMap[bottom] === 0) { backgroundMask[bottom] = 1; queue[tail++] = bottom; }
             }
             for (let y = 1; y < h - 1; y++) {
                 const left = y * w;
-                if (closedEdgeMap[left] === 0) { outsideMask[left] = 1; queue[tail++] = left; }
+                if (closedEdgeMap[left] === 0) { backgroundMask[left] = 1; queue[tail++] = left; }
                 const right = y * w + (w - 1);
-                if (closedEdgeMap[right] === 0) { outsideMask[right] = 1; queue[tail++] = right; }
+                if (closedEdgeMap[right] === 0) { backgroundMask[right] = 1; queue[tail++] = right; }
             }
 
             while (head < tail) {
@@ -612,17 +614,56 @@
                 const x = pos % w;
                 const y = (pos - x) / w;
 
-                if (x > 0 && outsideMask[pos - 1] === 0 && closedEdgeMap[pos - 1] === 0) {
-                    outsideMask[pos - 1] = 1; queue[tail++] = pos - 1;
+                if (x > 0 && backgroundMask[pos - 1] === 0 && closedEdgeMap[pos - 1] === 0) {
+                    backgroundMask[pos - 1] = 1; queue[tail++] = pos - 1;
                 }
-                if (x < w - 1 && outsideMask[pos + 1] === 0 && closedEdgeMap[pos + 1] === 0) {
-                    outsideMask[pos + 1] = 1; queue[tail++] = pos + 1;
+                if (x < w - 1 && backgroundMask[pos + 1] === 0 && closedEdgeMap[pos + 1] === 0) {
+                    backgroundMask[pos + 1] = 1; queue[tail++] = pos + 1;
                 }
-                if (y > 0 && outsideMask[pos - w] === 0 && closedEdgeMap[pos - w] === 0) {
-                    outsideMask[pos - w] = 1; queue[tail++] = pos - w;
+                if (y > 0 && backgroundMask[pos - w] === 0 && closedEdgeMap[pos - w] === 0) {
+                    backgroundMask[pos - w] = 1; queue[tail++] = pos - w;
                 }
-                if (y < h - 1 && outsideMask[pos + w] === 0 && closedEdgeMap[pos + w] === 0) {
-                    outsideMask[pos + w] = 1; queue[tail++] = pos + w;
+                if (y < h - 1 && backgroundMask[pos + w] === 0 && closedEdgeMap[pos + w] === 0) {
+                    backgroundMask[pos + w] = 1; queue[tail++] = pos + w;
+                }
+            }
+
+            // (B) 바깥 배경의 대표 색상을 추출하여, 캐릭터 몸통에 둘러싸인 '가운데 빈 구멍'도 배경으로 추가 마스킹
+            let bgR = 255, bgG = 255, bgB = 255, bgCount = 0;
+            let sumBgR = 0, sumBgG = 0, sumBgB = 0;
+            let hasTransparentBg = false;
+
+            for (let i = 0; i < total; i++) {
+                if (backgroundMask[i] === 1) {
+                    if (alphaBuf[i] < 50) hasTransparentBg = true;
+                    const idx = i * 4;
+                    sumBgR += srcData[idx];
+                    sumBgG += srcData[idx + 1];
+                    sumBgB += srcData[idx + 2];
+                    bgCount++;
+                }
+            }
+            if (bgCount > 0) {
+                bgR = sumBgR / bgCount;
+                bgG = sumBgG / bgCount;
+                bgB = sumBgB / bgCount;
+            }
+
+            // 만약 이미지가 단색 배경(예: 흰색 배경 PNG/JPG)이고, 캐릭터 자체에는 순백색(252 이상) 부위가 거의 없다면
+            // 몸통 고리 안쪽의 배경색 영역도 배경으로 간주
+            const isCleanWhiteBg = (bgR > 245 && bgG > 245 && bgB > 245);
+            for (let i = 0; i < total; i++) {
+                if (backgroundMask[i] === 0 && closedEdgeMap[i] === 0) {
+                    if (hasTransparentBg && alphaBuf[i] < 50) {
+                        // 투명 PNG의 가운데 뚫린 구멍은 100% 배경
+                        backgroundMask[i] = 1;
+                    } else if (isCleanWhiteBg) {
+                        const idx = i * 4;
+                        // 원본에서 완전히 순수한 배경 흰색(R,G,B 모두 250 이상)인 영역만 배경 구멍으로 처리
+                        if (srcData[idx] >= 250 && srcData[idx + 1] >= 250 && srcData[idx + 2] >= 250) {
+                            backgroundMask[i] = 1;
+                        }
+                    }
                 }
             }
         }
@@ -643,7 +684,7 @@
             const startPos = startY * w + startX;
 
             if (closedEdgeMap && closedEdgeMap[startPos] === 1) return;
-            if (protectBackground && outsideMask && outsideMask[startPos] === 1) return;
+            if (protectBackground && backgroundMask && backgroundMask[startPos] === 1) return;
 
             const imgData = paintCtx.getImageData(0, 0, w, h);
             const data = imgData.data;
@@ -683,7 +724,7 @@
                 for (let i = 0; i < neighbors.length; i++) {
                     const nPos = neighbors[i];
                     if (visited[nPos]) continue;
-                    if (protectBackground && outsideMask && outsideMask[nPos] === 1) continue;
+                    if (protectBackground && backgroundMask && backgroundMask[nPos] === 1) continue;
 
                     const nIdx = nPos * 4;
                     if (
@@ -728,7 +769,7 @@
                         if (px < 0 || px >= w) continue;
 
                         const pos = py * w + px;
-                        if (protectBackground && outsideMask && outsideMask[pos] === 1) continue;
+                        if (protectBackground && backgroundMask && backgroundMask[pos] === 1) continue;
 
                         const idx = pos * 4;
                         data[idx] = r;
