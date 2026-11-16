@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>크레용 색칠놀이 도안 변환기</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #fdf6e3;
+            font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        /* 상단 툴바 */
+        .header {
+            background-color: #ff9f43;
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            z-index: 10;
+            gap: 10px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+        .btn {
+            background: white;
+            color: #333;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.1s, background 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn:hover {
+            background: #fff3e0;
+            transform: translateY(-1px);
+        }
+        .btn:active {
+            transform: translateY(1px);
+        }
+        .btn.active {
+            background: #2e86de;
+            color: white;
+        }
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,255,255,0.25);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+        input[type="file"] {
+            display: none;
+        }
+
+        /* 메인 작업 영역 */
+        .main-area {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+            position: relative;
+            overflow: hidden;
+        }
+        .canvas-wrapper {
+            position: relative;
+            background: white;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 4px solid #fff;
+        }
+        canvas {
+            display: block;
+            touch-action: none;
+            cursor: crosshair;
+        }
+        #lineCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none; /* 터치/클릭은 아래 색칠 캔버스로 통과 */
+        }
+
+        /* 하단 크레용 팔레트 영역 */
+        .palette-dock {
+            background: #ffeaa7;
+            border-top: 3px solid #fdcb6e;
+            padding: 12px 15px 5px 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 -3px 10px rgba(0,0,0,0.08);
+            z-index: 10;
+        }
+        .crayon-box {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            max-width: 100%;
+            padding: 15px 10px 0 10px;
+            align-items: flex-end;
+        }
+        /* 크레용 디자인 */
+        .crayon {
+            width: 34px;
+            height: 75px;
+            border-radius: 4px 4px 0 0;
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            flex-shrink: 0;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        /* 크레용 심 (삼각형 팁) */
+        .crayon::before {
+            content: '';
+            position: absolute;
+            top: -18px;
+            left: 3px;
+            width: 0;
+            height: 0;
+            border-left: 14px solid transparent;
+            border-right: 14px solid transparent;
+            border-bottom: 18px solid var(--crayon-color);
+            filter: brightness(0.95);
+        }
+        /* 크레용 종이 라벨 띠 */
+        .crayon-label {
+            width: 100%;
+            height: 44px;
+            margin-top: 12px;
+            background: rgba(255, 255, 255, 0.78);
+            border-top: 4px solid #2d3436;
+            border-bottom: 4px solid #2d3436;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .crayon-label::after {
+            content: '';
+            width: 16px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--crayon-color);
+        }
+        .crayon:hover {
+            transform: translateY(-6px);
+        }
+        .crayon.selected {
+            transform: translateY(-16px) scale(1.05);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+        }
+        /* 지우개 크레용 스타일 */
+        .crayon.eraser {
+            --crayon-color: #ffffff;
+            background: #f1f2f6;
+            border: 1px solid #dfe4ea;
+        }
+        .crayon.eraser .crayon-label::after {
+            content: '지우개';
+            width: auto;
+            height: auto;
+            background: none;
+            font-size: 9px;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>🖍️ 나만의 크레용 색칠놀이</h1>
+        <div class="controls">
+            <label class="btn" for="imageLoader">📁 사진 불러오기</label>
+            <input type="file" id="imageLoader" accept="image/*">
+
+            <div class="slider-group" title="선 선명도 조절">
+                <span>선 진하기</span>
+                <input type="range" id="thresholdSlider" min="180" max="250" value="225">
+            </div>
+
+            <button class="btn active" id="modeFill">🪣 채우기</button>
+            <button class="btn" id="modeBrush">🖌️ 브러시</button>
+            <button class="btn" id="btnUndo">↩️ 되돌리기</button>
+            <button class="btn" id="btnClear">🗑️ 다 지우기</button>
+            <button class="btn" id="btnSave">💾 저장</button>
+        </div>
+    </div>
+
+    <div class="main-area" id="mainArea">
+        <div class="canvas-wrapper" id="canvasWrapper">
+            <!-- 실제 색이 칠해지는 하단 캔버스 -->
+            <canvas id="paintCanvas" width="700" height="500"></canvas>
+            <!-- 검은색 도안 선만 투명하게 올라가는 상단 캔버스 -->
+            <canvas id="lineCanvas" width="700" height="500"></canvas>
+        </div>
+    </div>
+
+    <div class="palette-dock">
+        <div class="crayon-box" id="crayonBox"></div>
+    </div>
+
+    <script>
+        const paintCanvas = document.getElementById('paintCanvas');
+        const paintCtx = paintCanvas.getContext('2d', { willReadFrequently: true });
+        const lineCanvas = document.getElementById('lineCanvas');
+        const lineCtx = lineCanvas.getContext('2d', { willReadFrequently: true });
+
+        const imageLoader = document.getElementById('imageLoader');
+        const thresholdSlider = document.getElementById('thresholdSlider');
+        const crayonBox = document.getElementById('crayonBox');
+
+        // 크레용 색상 목록
+        const colors = [
+            { name: '빨강', hex: '#ff3b30' },
+            { name: '다홍', hex: '#ff6b35' },
+            { name: '주황', hex: '#ff9500' },
+            { name: '노랑', hex: '#ffcc00' },
+            { name: '연두', hex: '#8ce99a' },
+            { name: '초록', hex: '#28cd41' },
+            { name: '민트', hex: '#00c7be' },
+            { name: '하늘', hex: '#5ac8fa' },
+            { name: '파랑', hex: '#007aff' },
+            { name: '남색', hex: '#364fc7' },
+            { name: '보라', hex: '#af52de' },
+            { name: '분홍', hex: '#ff2d55' },
+            { name: '살구', hex: '#ffd8be' },
+            { name: '갈색', hex: '#8d5524' },
+            { name: '회색', hex: '#8e8e93' },
+            { name: '검정', hex: '#2c2c2e' }
+        ];
+
+        let currentColor = colors[0].hex;
+        let currentMode = 'fill'; // 'fill' or 'brush'
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let loadedImg = null;
+        let historyStack = [];
+        let edgeMap = null; // 채우기 시 경계선 판별용 배열
+
+        // 크레용 팔레트 UI 생성
+        function initPalette() {
+            colors.forEach((c, idx) => {
+                const crayon = document.createElement('div');
+                crayon.className = 'crayon' + (idx === 0 ? ' selected' : '');
+                crayon.style.backgroundColor = c.hex;
+                crayon.style.setProperty('--crayon-color', c.hex);
+                crayon.title = c.name;
+
+                const label = document.createElement('div');
+                label.className = 'crayon-label';
+                crayon.appendChild(label);
+
+                crayon.addEventListener('click', () => {
+                    document.querySelectorAll('.crayon').forEach(el => el.classList.remove('selected'));
+                    crayon.classList.add('selected');
+                    currentColor = c.hex;
+                });
+                crayonBox.appendChild(crayon);
+            });
+
+            // 지우개 추가
+            const eraser = document.createElement('div');
+            eraser.className = 'crayon eraser';
+            eraser.title = '하얀 지우개';
+            const eLabel = document.createElement('div');
+            eLabel.className = 'crayon-label';
+            eraser.appendChild(eLabel);
+            eraser.addEventListener('click', () => {
+                document.querySelectorAll('.crayon').forEach(el => el.classList.remove('selected'));
+                eraser.classList.add('selected');
+                currentColor = '#ffffff';
+            });
+            crayonBox.appendChild(eraser);
+        }
+
+        // 초기 샘플 그림(귀여운 비행기 도안) 그리기
+        function drawSamplePlane() {
+            clearPaintCanvas();
+            lineCtx.clearRect(0, 0, lineCanvas.width, lineCanvas.height);
+
+            lineCtx.strokeStyle = '#111111';
+            lineCtx.lineWidth = 5;
+            lineCtx.lineCap = 'round';
+            lineCtx.lineJoin = 'round';
+
+            const cx = lineCanvas.width / 2;
+            const cy = lineCanvas.height / 2;
+
+            // 구름 1
+            lineCtx.beginPath();
+            lineCtx.arc(130, 110, 25, 0, Math.PI * 2);
+            lineCtx.arc(160, 105, 30, 0, Math.PI * 2);
+            lineCtx.arc(190, 115, 22, 0, Math.PI * 2);
+            lineCtx.fillStyle = 'white';
+            lineCtx.fill();
+            lineCtx.stroke();
+
+            // 구름 2
+            lineCtx.beginPath();
+            lineCtx.arc(520, 130, 22, 0, Math.PI * 2);
+            lineCtx.arc(550, 125, 28, 0, Math.PI * 2);
+            lineCtx.arc(580, 135, 20, 0, Math.PI * 2);
+            lineCtx.fill();
+            lineCtx.stroke();
+
+            // 비행기 날개
+            lineCtx.beginPath();
+            lineCtx.moveTo(cx - 40, cy);
+            lineCtx.lineTo(cx - 160, cy - 30);
+            lineCtx.lineTo(cx - 150, cy + 25);
+            lineCtx.lineTo(cx - 30, cy + 35);
+            lineCtx.closePath();
+            lineCtx.fill();
+            lineCtx.stroke();
+
+            lineCtx.beginPath();
+            lineCtx.moveTo(cx + 40, cy);
+            lineCtx.lineTo(cx + 160, cy - 30);
+            lineCtx.lineTo(cx + 150, cy + 25);
+            lineCtx.lineTo(cx + 30, cy + 35);
+            lineCtx.closePath();
+            lineCtx.fill();
+            lineCtx.stroke();
+
+            // 꼬리 날개
+            lineCtx.beginPath();
+            lineCtx.moveTo(cx, cy - 60);
+            lineCtx.lineTo(cx - 18, cy - 135);
+            lineCtx.lineTo(cx + 18, cy - 135);
+            lineCtx.closePath();
+            lineCtx.fill();
+            lineCtx.stroke();
+
+            // 비행기 동체
+            lineCtx.beginPath();
+            lineCtx.ellipse(cx, cy + 10, 75, 95, 0, 0, Math.PI * 2);
+            lineCtx.fill();
+            lineCtx.stroke();
+
+            // 조종석 유리창
+            lineCtx.beginPath();
+            lineCtx.ellipse(cx, cy - 25, 45, 28, 0, Math.PI, 0, false);
+            lineCtx.quadraticCurveTo(cx, cy - 10, cx - 45, cy - 25);
+            lineCtx.fill();
+            lineCtx.stroke();
+
+            // 눈 (왼쪽, 오른쪽)
+            lineCtx.beginPath();
+            lineCtx.arc(cx - 18, cy + 18, 13, 0, Math.PI * 2);
+            lineCtx.stroke();
+            lineCtx.beginPath();
+            lineCtx.arc(cx + 18, cy + 18, 13, 0, Math.PI * 2);
+            lineCtx.stroke();
+
+            // 웃는 입
+            lineCtx.beginPath();
+            lineCtx.arc(cx, cy + 48, 22, 0.15 * Math.PI, 0.85 * Math.PI);
+            lineCtx.stroke();
+
+            // 흰색 배경을 투명하게 변환하여 선만 남기기
+            const imgData = lineCtx.getImageData(0, 0, lineCanvas.width, lineCanvas.height);
+            const data = imgData.data;
+            edgeMap = new Uint8Array(lineCanvas.width * lineCanvas.height);
+
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i] > 200 && data[i+1] > 200 && data[i+2] > 200) {
+                    data[i+3] = 0; // 흰색 투명화
+                    edgeMap[i / 4] = 0;
+                } else {
+                    data[i] = 20; data[i+1] = 20; data[i+2] = 20; data[i+3] = 255;
+                    edgeMap[i / 4] = 1; // 선 영역 표시
+                }
+            }
+            lineCtx.putImageData(imgData, 0, 0);
+            saveHistory();
+        }
+
+        function clearPaintCanvas() {
+            paintCtx.fillStyle = '#ffffff';
+            paintCtx.fillRect(0, 0, paintCanvas.width, paintCanvas.height);
+        }
+
+        function saveHistory() {
+            if (historyStack.length > 15) historyStack.shift();
+            historyStack.push(paintCtx.getImageData(0, 0, paintCanvas.width, paintCanvas.height));
+        }
+
+        // 이미지 업로드 처리
+        imageLoader.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    loadedImg = img;
+                    fitAndProcessImage();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        thresholdSlider.addEventListener('input', () => {
+            if (loadedImg) processLineArt();
+        });
+
+        // 캔버스 크기를 화면과 이미지 비율에 맞게 조정
+        function fitAndProcessImage() {
+            const mainArea = document.getElementById('mainArea');
+            const maxW = mainArea.clientWidth - 40;
+            const maxH = mainArea.clientHeight - 40;
+
+            let w = loadedImg.width;
+            let h = loadedImg.height;
+            const ratio = Math.min(maxW / w, maxH / h, 1.2);
+            w = Math.floor(w * ratio);
+            h = Math.floor(h * ratio);
+
+            paintCanvas.width = lineCanvas.width = w;
+            paintCanvas.height = lineCanvas.height = h;
+
+            historyStack = [];
+            clearPaintCanvas();
+            processLineArt();
+            saveHistory();
+        }
+
+        // 이미지를 흑백 선화(윤곽선)로 변환 (Color Dodge + Blur 근사 방식)
+        function processLineArt() {
+            const w = lineCanvas.width;
+            const h = lineCanvas.height;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = w;
+            tempCanvas.height = h;
+            const tCtx = tempCanvas.getContext('2d');
+            tCtx.drawImage(loadedImg, 0, 0, w, h);
+
+            const srcData = tCtx.getImageData(0, 0, w, h).data;
+            const gray = new Float32Array(w * h);
+
+            // 1. 그레이스케일 변환
+            for (let i = 0; i < w * h; i++) {
+                const idx = i * 4;
+                gray[i] = 0.299 * srcData[idx] + 0.587 * srcData[idx + 1] + 0.114 * srcData[idx + 2];
+            }
+
+            // 2. 가우시안 블러 근사 (반전 후 블러 효과를 위한 주변 평균)
+            const blurred = new Float32Array(w * h);
+            const radius = 3;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    let sum = 0;
+                    let count = 0;
+                    for (let dy = -radius; dy <= radius; dy++) {
+                        const ny = y + dy;
+                        if (ny < 0 || ny >= h) continue;
+                        for (let dx = -radius; dx <= radius; dx++) {
+                            const nx = x + dx;
+                            if (nx < 0 || nx >= w) continue;
+                            sum += (255 - gray[ny * w + nx]);
+                            count++;
+                        }
+                    }
+                    blurred[y * w + x] = sum / count;
+                }
+            }
+
+            // 3. Color Dodge 연산 및 임계값 처리로 깔끔한 선 추출
+            const threshold = parseInt(thresholdSlider.value, 10);
+            const outImg = lineCtx.createImageData(w, h);
+            const out = outImg.data;
+            edgeMap = new Uint8Array(w * h);
+
+            for (let i = 0; i < w * h; i++) {
+                const base = gray[i];
+                const blend = blurred[i];
+                let val = blend >= 255 ? 255 : Math.min(255, (base * 255) / (255 - blend));
+
+                const idx = i * 4;
+                if (val < threshold) {
+                    // 선 부분 (불투명 검정)
+                    const darkness = Math.max(0, Math.min(255, (val / threshold) * 80));
+                    out[idx] = darkness;
+                    out[idx + 1] = darkness;
+                    out[idx + 2] = darkness;
+                    out[idx + 3] = 255;
+                    edgeMap[i] = 1;
+                } else {
+                    // 배경 부분 (완전 투명 -> 아래 페인트 캔버스 색상이 보임)
+                    out[idx + 3] = 0;
+                    edgeMap[i] = 0;
+                }
+            }
+
+            lineCtx.putImageData(outImg, 0, 0);
+        }
+
+        // Hex -> RGB 변환
+        function hexToRgb(hex) {
+            const bigint = parseInt(hex.slice(1), 16);
+            return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+        }
+
+        // 플러드 필 (페인트 통 채우기 알고리즘)
+        function floodFill(startX, startY, fillHex) {
+            const w = paintCanvas.width;
+            const h = paintCanvas.height;
+            startX = Math.floor(startX);
+            startY = Math.floor(startY);
+
+            if (startX < 0 || startX >= w || startY < 0 || startY >= h) return;
+            // 선 위를 직접 클릭한 경우 무시
+            if (edgeMap && edgeMap[startY * w + startX] === 1) return;
+
+            const imgData = paintCtx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+            const [fillR, fillG, fillB] = hexToRgb(fillHex);
+
+            const startIdx = (startY * w + startX) * 4;
+            const targetR = data[startIdx];
+            const targetG = data[startIdx + 1];
+            const targetB = data[startIdx + 2];
+
+            // 이미 같은 색이면 중단
+            if (targetR === fillR && targetG === fillG && targetB === fillB) return;
+
+            const visited = new Uint8Array(w * h);
+            const stack = [[startX, startY]];
+            const tolerance = 35;
+
+            function matchesTarget(pos) {
+                if (edgeMap && edgeMap[pos] === 1) return false;
+                const idx = pos * 4;
+                return (
+                    Math.abs(data[idx] - targetR) <= tolerance &&
+                    Math.abs(data[idx + 1] - targetG) <= tolerance &&
+                    Math.abs(data[idx + 2] - targetB) <= tolerance
+                );
+            }
+
+            while (stack.length > 0) {
+                const [x, y] = stack.pop();
+                const pos = y * w + x;
+
+                if (x < 0 || x >= w || y < 0 || y >= h || visited[pos]) continue;
+                if (!matchesTarget(pos)) continue;
+
+                visited[pos] = 1;
+                const idx = pos * 4;
+                data[idx] = fillR;
+                data[idx + 1] = fillG;
+                data[idx + 2] = fillB;
+                data[idx + 3] = 255;
+
+                stack.push([x + 1, y]);
+                stack.push([x - 1, y]);
+                stack.push([x, y + 1]);
+                stack.push([x, y - 1]);
+            }
+
+            paintCtx.putImageData(imgData, 0, 0);
+            saveHistory();
+        }
+
+        // 좌표 계산 헬퍼 (마우스 및 터치 통합)
+        function getCoords(e) {
+            const rect = paintCanvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: (clientX - rect.left) * (paintCanvas.width / rect.width),
+                y: (clientY - rect.top) * (paintCanvas.height / rect.height)
+            };
+        }
+
+        function handleStart(e) {
+            e.preventDefault();
+            const { x, y } = getCoords(e);
+            if (currentMode === 'fill') {
+                floodFill(x, y, currentColor);
+            } else {
+                isDrawing = true;
+                lastX = x;
+                lastY = y;
+                drawBrush(x, y);
+            }
+        }
+
+        function handleMove(e) {
+            if (!isDrawing || currentMode !== 'brush') return;
+            e.preventDefault();
+            const { x, y } = getCoords(e);
+            drawBrush(x, y);
+        }
+
+        function handleEnd() {
+            if (isDrawing) {
+                isDrawing = false;
+                saveHistory();
+            }
+        }
+
+        function drawBrush(x, y) {
+            paintCtx.strokeStyle = currentColor;
+            paintCtx.lineWidth = 18;
+            paintCtx.lineCap = 'round';
+            paintCtx.lineJoin = 'round';
+
+            paintCtx.beginPath();
+            paintCtx.moveTo(lastX, lastY);
+            paintCtx.lineTo(x, y);
+            paintCtx.stroke();
+
+            lastX = x;
+            lastY = y;
+        }
+
+        paintCanvas.addEventListener('mousedown', handleStart);
+        paintCanvas.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleEnd);
+
+        paintCanvas.addEventListener('touchstart', handleStart, { passive: false });
+        paintCanvas.addEventListener('touchmove', handleMove, { passive: false });
+        window.addEventListener('touchend', handleEnd);
+
+        // 모드 전환 및 버튼 이벤트
+        const modeFillBtn = document.getElementById('modeFill');
+        const modeBrushBtn = document.getElementById('modeBrush');
+
+        modeFillBtn.addEventListener('click', () => {
+            currentMode = 'fill';
+            modeFillBtn.classList.add('active');
+            modeBrushBtn.classList.remove('active');
+        });
+
+        modeBrushBtn.addEventListener('click', () => {
+            currentMode = 'brush';
+            modeBrushBtn.classList.add('active');
+            modeFillBtn.classList.remove('active');
+        });
+
+        document.getElementById('btnUndo').addEventListener('click', () => {
+            if (historyStack.length > 1) {
+                historyStack.pop();
+                const prev = historyStack[historyStack.length - 1];
+                paintCtx.putImageData(prev, 0, 0);
+            }
+        });
+
+        document.getElementById('btnClear').addEventListener('click', () => {
+            clearPaintCanvas();
+            saveHistory();
+        });
+
+        document.getElementById('btnSave').addEventListener('click', () => {
+            // 색칠 캔버스와 도안 선 캔버스를 합쳐서 이미지로 저장
+            const merged = document.createElement('canvas');
+            merged.width = paintCanvas.width;
+            merged.height = paintCanvas.height;
+            const mCtx = merged.getContext('2d');
+            mCtx.drawImage(paintCanvas, 0, 0);
+            mCtx.drawImage(lineCanvas, 0, 0);
+
+            const link = document.createElement('a');
+            link.download = '나만의_크레용_색칠작품.png';
+            link.href = merged.toDataURL('image/png');
+            link.click();
+        });
+
+        // 초기화 실행
+        initPalette();
+        drawSamplePlane();
+    </script>
+</body>
+</html>
