@@ -87,7 +87,7 @@
             font-weight: bold;
         }
         input[type="range"] {
-            width: 80px;
+            width: 85px;
         }
         input[type="file"] {
             display: none;
@@ -241,9 +241,9 @@
             <label class="btn" for="imageLoader">📁 사진 불러오기</label>
             <input type="file" id="imageLoader" accept="image/*">
 
-            <div class="slider-group" title="선 진하기 조절">
-                <span>선 진하기</span>
-                <input type="range" id="thresholdSlider" min="185" max="248" value="225">
+            <div class="slider-group" title="값에 따라 자잘한 선을 생략하고 굵은 선만 남깁니다">
+                <span>도안 단순화</span>
+                <input type="range" id="simplifySlider" min="15" max="75" value="38">
             </div>
 
             <button class="btn active" id="modeFill">🪣 채우기</button>
@@ -278,7 +278,7 @@
         const emptyGuide = document.getElementById('emptyGuide');
 
         const imageLoader = document.getElementById('imageLoader');
-        const thresholdSlider = document.getElementById('thresholdSlider');
+        const simplifySlider = document.getElementById('simplifySlider');
         const crayonBox = document.getElementById('crayonBox');
 
         // 크레용 색상 목록
@@ -302,19 +302,17 @@
         ];
 
         let currentColor = colors[0].hex;
-        let currentMode = 'fill'; // 'fill' or 'brush'
-        let protectBackground = true; // 바깥 배경 보호 여부
+        let currentMode = 'fill';
+        let protectBackground = true;
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
         let loadedImg = null;
         let historyStack = [];
 
-        let edgeMap = null;       // 1이면 도안 선, 0이면 빈 공간
-        let closedEdgeMap = null; // 틈새를 메운 채우기/배경판별용 선 맵
-        let outsideMask = null;   // 1이면 캐릭터 바깥 배경, 0이면 캐릭터 내부
+        let closedEdgeMap = null;
+        let outsideMask = null;
 
-        // 크레용 팔레트 UI 생성
         function initPalette() {
             colors.forEach((c, idx) => {
                 const crayon = document.createElement('div');
@@ -335,7 +333,6 @@
                 crayonBox.appendChild(crayon);
             });
 
-            // 지우개 추가
             const eraser = document.createElement('div');
             eraser.className = 'crayon eraser';
             eraser.title = '하얀 지우개';
@@ -360,7 +357,6 @@
             historyStack.push(paintCtx.getImageData(0, 0, paintCanvas.width, paintCanvas.height));
         }
 
-        // 이미지 업로드 처리
         imageLoader.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -377,11 +373,10 @@
             reader.readAsDataURL(file);
         });
 
-        thresholdSlider.addEventListener('input', () => {
+        simplifySlider.addEventListener('input', () => {
             if (loadedImg) processLineArt();
         });
 
-        // 캔버스 크기를 화면과 이미지 비율에 맞게 조정
         function fitAndProcessImage() {
             const mainArea = document.getElementById('mainArea');
             const maxW = mainArea.clientWidth - 36;
@@ -402,7 +397,7 @@
             saveHistory();
         }
 
-        // 선 추출 + 미세 틈새 메우기 + 바깥 배경 영역 자동 감지
+        // 핵심 개선: 컬러 경계 보존 스무딩 + RGB 벡터 Sobel 경계 검출 + 자잘한 점(노이즈) 제거 + 매끄러운 단선화
         function processLineArt() {
             const w = lineCanvas.width;
             const h = lineCanvas.height;
@@ -414,92 +409,192 @@
             tCtx.drawImage(loadedImg, 0, 0, w, h);
 
             const srcData = tCtx.getImageData(0, 0, w, h).data;
-            const gray = new Float32Array(w * h);
+            const total = w * h;
 
-            // 1. 그레이스케일 변환 (투명 배경 PNG인 경우 흰색 배경으로 처리)
-            for (let i = 0; i < w * h; i++) {
+            // 1. 투명 영역 흰색 합성 후 RGB 버퍼 준비
+            let rBuf = new Float32Array(total);
+            let gBuf = new Float32Array(total);
+            let bBuf = new Float32Array(total);
+
+            for (let i = 0; i < total; i++) {
                 const idx = i * 4;
                 const alpha = srcData[idx + 3] / 255;
-                const r = srcData[idx] * alpha + 255 * (1 - alpha);
-                const g = srcData[idx + 1] * alpha + 255 * (1 - alpha);
-                const b = srcData[idx + 2] * alpha + 255 * (1 - alpha);
-                gray[i] = 0.299 * r + 0.587 * g + 0.114 * b;
+                rBuf[i] = srcData[idx] * alpha + 255 * (1 - alpha);
+                gBuf[i] = srcData[idx + 1] * alpha + 255 * (1 - alpha);
+                bBuf[i] = srcData[idx + 2] * alpha + 255 * (1 - alpha);
             }
 
-            // 2. 가우시안 블러 근사
-            const blurred = new Float32Array(w * h);
-            const radius = 3;
-            for (let y = 0; y < h; y++) {
-                for (let x = 0; x < w; x++) {
-                    let sum = 0;
-                    let count = 0;
-                    for (let dy = -radius; dy <= radius; dy++) {
-                        const ny = y + dy;
-                        if (ny < 0 || ny >= h) continue;
-                        for (let dx = -radius; dx <= radius; dx++) {
-                            const nx = x + dx;
-                            if (nx < 0 || nx >= w) continue;
-                            sum += (255 - gray[ny * w + nx]);
-                            count++;
-                        }
-                    }
-                    blurred[y * w + x] = sum / count;
-                }
-            }
+            // 2. 간이 Bilateral Filter (색상이 비슷한 영역은 뭉개고, 색이 크게 다른 경계선은 날카롭게 보존)
+            // 이를 통해 입체 명암/그라데이션/자잘한 그림자를 제거해 컬러링북처럼 단순화함
+            for (let pass = 0; pass < 2; pass++) {
+                const nextR = new Float32Array(total);
+                const nextG = new Float32Array(total);
+                const nextB = new Float32Array(total);
+                const colorSigma = 45; // 색상 차이 허용치
 
-            // 3. Color Dodge 연산 및 선 추출
-            const threshold = parseInt(thresholdSlider.value, 10);
-            const outImg = lineCtx.createImageData(w, h);
-            const out = outImg.data;
-            edgeMap = new Uint8Array(w * h);
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const pos = y * w + x;
+                        const cr = rBuf[pos], cg = gBuf[pos], cb = bBuf[pos];
+                        let sumR = 0, sumG = 0, sumB = 0, wSum = 0;
 
-            for (let i = 0; i < w * h; i++) {
-                const base = gray[i];
-                const blend = blurred[i];
-                let val = blend >= 255 ? 255 : Math.min(255, (base * 255) / (255 - blend));
-
-                const idx = i * 4;
-                if (val < threshold) {
-                    const darkness = Math.max(0, Math.min(255, (val / threshold) * 70));
-                    out[idx] = darkness;
-                    out[idx + 1] = darkness;
-                    out[idx + 2] = darkness;
-                    out[idx + 3] = 255;
-                    edgeMap[i] = 1;
-                } else {
-                    out[idx + 3] = 0;
-                    edgeMap[i] = 0;
-                }
-            }
-            lineCtx.putImageData(outImg, 0, 0);
-
-            // 4. 채우기(Flood Fill) 시 미세한 1~2px 틈새로 물감이 새는 것을 막기 위해 팽창(Dilation)된 경계 맵 생성
-            closedEdgeMap = new Uint8Array(w * h);
-            for (let y = 0; y < h; y++) {
-                for (let x = 0; x < w; x++) {
-                    const pos = y * w + x;
-                    if (edgeMap[pos] === 1) {
-                        // 주변 1픽셀까지 경계로 확장하여 미세 구멍 봉합
-                        for (let dy = -1; dy <= 1; dy++) {
+                        for (let dy = -2; dy <= 2; dy++) {
                             const ny = y + dy;
                             if (ny < 0 || ny >= h) continue;
-                            for (let dx = -1; dx <= 1; dx++) {
+                            for (let dx = -2; dx <= 2; dx++) {
                                 const nx = x + dx;
                                 if (nx < 0 || nx >= w) continue;
-                                closedEdgeMap[ny * w + nx] = 1;
+                                const nPos = ny * w + nx;
+                                const dr = rBuf[nPos] - cr;
+                                const dg = gBuf[nPos] - cg;
+                                const db = bBuf[nPos] - cb;
+                                const colorDist = Math.sqrt(dr * dr + dg * dg + db * db);
+
+                                if (colorDist < colorSigma) {
+                                    const weight = 1 - (colorDist / colorSigma);
+                                    sumR += rBuf[nPos] * weight;
+                                    sumG += gBuf[nPos] * weight;
+                                    sumB += bBuf[nPos] * weight;
+                                    wSum += weight;
+                                }
+                            }
+                        }
+                        nextR[pos] = sumR / wSum;
+                        nextG[pos] = sumG / wSum;
+                        nextB[pos] = sumB / wSum;
+                    }
+                }
+                rBuf = nextR; gBuf = nextG; bBuf = nextB;
+            }
+
+            // 3. RGB 멀티채널 Sobel 필터 (빨간 동체와 흰 배처럼 밝기가 비슷해도 색상이 다르면 정확히 선 추출)
+            const edgeThreshold = parseInt(simplifySlider.value, 10) * 3.2;
+            const rawBinary = new Uint8Array(total);
+
+            for (let y = 1; y < h - 1; y++) {
+                for (let x = 1; x < w - 1; x++) {
+                    const pos = y * w + x;
+
+                    // 각 채널별 X, Y 방향 기울기(Gradient) 계산
+                    const channels = [rBuf, gBuf, bBuf];
+                    let maxGrad = 0;
+
+                    for (let c = 0; c < 3; c++) {
+                        const ch = channels[c];
+                        const tl = ch[(y - 1) * w + (x - 1)], tc = ch[(y - 1) * w + x], tr = ch[(y - 1) * w + (x + 1)];
+                        const ml = ch[y * w + (x - 1)],                                   mr = ch[y * w + (x + 1)];
+                        const bl = ch[(y + 1) * w + (x - 1)], bc = ch[(y + 1) * w + x], br = ch[(y + 1) * w + (x + 1)];
+
+                        const gx = -tl + tr - 2 * ml + 2 * mr - bl + br;
+                        const gy = -tl - 2 * tc - tr + bl + 2 * bc + br;
+                        const grad = Math.hypot(gx, gy);
+                        if (grad > maxGrad) maxGrad = grad;
+                    }
+
+                    // 원래 아주 어두운 검은 윤곽선(눈동자, 기존 검은 테두리)도 함께 보존
+                    const lum = 0.299 * rBuf[pos] + 0.587 * gBuf[pos] + 0.114 * bBuf[pos];
+                    if (maxGrad > edgeThreshold || lum < 65) {
+                        rawBinary[pos] = 1;
+                    }
+                }
+            }
+
+            // 4. 연결 요소(Connected Component) 분석으로 25픽셀 미만의 자잘한 잡티·점(노이즈) 제거
+            const visited = new Uint8Array(total);
+            const cleanBinary = new Uint8Array(total);
+            const compQueue = new Int32Array(total);
+            const minComponentSize = 25;
+
+            for (let i = 0; i < total; i++) {
+                if (rawBinary[i] === 1 && visited[i] === 0) {
+                    let head = 0, tail = 0;
+                    visited[i] = 1;
+                    compQueue[tail++] = i;
+
+                    while (head < tail) {
+                        const p = compQueue[head++];
+                        const px = p % w;
+                        const py = (p - px) / w;
+
+                        for (let dy = -1; dy <= 1; dy++) {
+                            const ny = py + dy;
+                            if (ny < 0 || ny >= h) continue;
+                            for (let dx = -1; dx <= 1; dx++) {
+                                const nx = px + dx;
+                                if (nx < 0 || nx >= w) continue;
+                                const np = ny * w + nx;
+                                if (rawBinary[np] === 1 && visited[np] === 0) {
+                                    visited[np] = 1;
+                                    compQueue[tail++] = np;
+                                }
+                            }
+                        }
+                    }
+
+                    // 일정 크기 이상의 의미 있는 선 덩어리만 유지
+                    if (tail >= minComponentSize) {
+                        for (let k = 0; k < tail; k++) {
+                            cleanBinary[compQueue[k]] = 1;
+                        }
+                    }
+                }
+            }
+
+            // 5. 형태학적 닫힘(Closing: 팽창 후 침식)으로 끊어진 선을 부드럽게 연결하고 두께 균일화
+            const dilated = new Uint8Array(total);
+            for (let y = 1; y < h - 1; y++) {
+                for (let x = 1; x < w - 1; x++) {
+                    const pos = y * w + x;
+                    if (cleanBinary[pos] === 1) {
+                        for (let dy = -1; dy <= 1; dy++) {
+                            for (let dx = -1; dx <= 1; dx++) {
+                                dilated[(y + dy) * w + (x + dx)] = 1;
                             }
                         }
                     }
                 }
             }
 
-            // 5. 캔버스 테두리(외곽)에서부터 연결된 영역을 탐색해 '바깥 배경 마스크' 생성
-            outsideMask = new Uint8Array(w * h);
-            const queue = new Int32Array(w * h);
-            let head = 0;
-            let tail = 0;
+            // 화면에 그릴 깔끔한 안티앨리어싱 선 이미지 생성
+            const outImg = lineCtx.createImageData(w, h);
+            const out = outImg.data;
+            closedEdgeMap = dilated;
 
-            // 상하좌우 테두리 픽셀을 시작점으로 추가
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const pos = y * w + x;
+                    const idx = pos * 4;
+                    if (dilated[pos] === 1) {
+                        out[idx] = 28;
+                        out[idx + 1] = 28;
+                        out[idx + 2] = 30;
+                        out[idx + 3] = 255;
+                    } else {
+                        // 선 바로 옆 1픽셀에 반투명 안티앨리어싱을 주어 계단 현상 완화
+                        let nearEdge = 0;
+                        if (x > 0 && dilated[pos - 1]) nearEdge++;
+                        if (x < w - 1 && dilated[pos + 1]) nearEdge++;
+                        if (y > 0 && dilated[pos - w]) nearEdge++;
+                        if (y < h - 1 && dilated[pos + w]) nearEdge++;
+
+                        if (nearEdge > 0) {
+                            out[idx] = 28;
+                            out[idx + 1] = 28;
+                            out[idx + 2] = 30;
+                            out[idx + 3] = nearEdge * 45;
+                        } else {
+                            out[idx + 3] = 0;
+                        }
+                    }
+                }
+            }
+            lineCtx.putImageData(outImg, 0, 0);
+
+            // 6. 바깥 배경 마스크 계산 (외곽 테두리에서 시작)
+            outsideMask = new Uint8Array(total);
+            const queue = new Int32Array(total);
+            let head = 0, tail = 0;
+
             for (let x = 0; x < w; x++) {
                 if (closedEdgeMap[x] === 0) { outsideMask[x] = 1; queue[tail++] = x; }
                 const bottom = (h - 1) * w + x;
@@ -537,7 +632,6 @@
             return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
         }
 
-        // 개선된 플러드 필 (선 틈새 방지 + 배경 보호 적용)
         function floodFill(startX, startY, fillHex) {
             if (!loadedImg) return;
             const w = paintCanvas.width;
@@ -548,7 +642,6 @@
             if (startX < 0 || startX >= w || startY < 0 || startY >= h) return;
             const startPos = startY * w + startX;
 
-            // 선 위를 클릭했거나, 배경 보호가 켜져 있는데 바깥 배경을 클릭한 경우 무시
             if (closedEdgeMap && closedEdgeMap[startPos] === 1) return;
             if (protectBackground && outsideMask && outsideMask[startPos] === 1) return;
 
@@ -573,14 +666,12 @@
                 const x = pos % w;
                 const y = (pos - x) / w;
 
-                // 칠한 색이 선 바로 밑까지 자연스럽게 닿도록 픽셀 채우기
                 const idx = pos * 4;
                 data[idx] = fillR;
                 data[idx + 1] = fillG;
                 data[idx + 2] = fillB;
                 data[idx + 3] = 255;
 
-                // 경계선 픽셀이면 더 이상 바깥으로 번지지 않고 여기서 멈춤
                 if (closedEdgeMap && closedEdgeMap[pos] === 1) continue;
 
                 const neighbors = [];
@@ -610,7 +701,6 @@
             saveHistory();
         }
 
-        // 브러시 칠하기 (배경 보호 활성화 시 바깥 여백에는 칠해지지 않도록 픽셀 단위 마스킹)
         function drawBrushSegment(x0, y0, x1, y1) {
             if (!loadedImg) return;
             const w = paintCanvas.width;
@@ -638,7 +728,6 @@
                         if (px < 0 || px >= w) continue;
 
                         const pos = py * w + px;
-                        // 배경 보호가 켜져 있고 바깥 배경이면 칠하지 않고 건너뜀
                         if (protectBackground && outsideMask && outsideMask[pos] === 1) continue;
 
                         const idx = pos * 4;
@@ -701,7 +790,6 @@
         paintCanvas.addEventListener('touchmove', handleMove, { passive: false });
         window.addEventListener('touchend', handleEnd);
 
-        // 모드 전환 및 버튼 이벤트
         const modeFillBtn = document.getElementById('modeFill');
         const modeBrushBtn = document.getElementById('modeBrush');
         const btnBgLock = document.getElementById('btnBgLock');
@@ -758,7 +846,6 @@
             link.click();
         });
 
-        // 초기화 실행
         initPalette();
         clearPaintCanvas();
     </script>
