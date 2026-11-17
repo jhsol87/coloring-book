@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>포켓몬 & 크레용 색칠놀이 도안 변환기</title>
+    <title>포켓몬 크레용 색칠놀이</title>
     <style>
         * {
             box-sizing: border-box;
@@ -20,6 +20,7 @@
             height: 100vh;
             overflow: hidden;
         }
+        /* 상단 툴바 */
         .header {
             background-color: #ff9f43;
             color: white;
@@ -90,11 +91,10 @@
             font-weight: bold;
         }
         input[type="range"] {
-            width: 75px;
+            width: 70px;
         }
-        input[type="file"] {
-            display: none;
-        }
+
+        /* 메인 작업 영역 (좌: 원본 참조 / 우: 색칠 도안) */
         .main-area {
             flex: 1;
             display: flex;
@@ -103,6 +103,29 @@
             padding: 12px;
             position: relative;
             overflow: hidden;
+            gap: 20px;
+        }
+        .reference-panel {
+            background: white;
+            padding: 10px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 3px solid #ff9f43;
+            max-width: 220px;
+            text-align: center;
+        }
+        .reference-panel h3 {
+            margin: 0 0 8px 0;
+            font-size: 0.85rem;
+            color: #d35400;
+        }
+        .reference-panel img {
+            width: 140px;
+            height: 140px;
+            object-fit: contain;
         }
         .canvas-wrapper {
             position: relative;
@@ -138,13 +161,14 @@
             padding: 20px;
             gap: 12px;
             z-index: 2;
+            background: white;
         }
         .empty-guide span {
-            font-size: 2.6rem;
+            font-size: 3rem;
         }
         .empty-guide p {
             margin: 0;
-            font-size: 0.95rem;
+            font-size: 1rem;
             font-weight: bold;
             line-height: 1.5;
         }
@@ -152,17 +176,19 @@
             background: #ff4757;
             color: white;
             border: none;
-            padding: 10px 18px;
+            padding: 12px 24px;
             border-radius: 25px;
-            font-size: 0.95rem;
+            font-size: 1rem;
             font-weight: bold;
             cursor: pointer;
             box-shadow: 0 4px 10px rgba(255, 71, 87, 0.35);
         }
+
+        /* 하단 크레용 팔레트 영역 (확장형) */
         .palette-dock {
             background: #ffeaa7;
             border-top: 3px solid #fdcb6e;
-            padding: 10px 12px 6px 12px;
+            padding: 8px 12px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -171,21 +197,21 @@
         }
         .crayon-box {
             display: flex;
-            gap: 10px;
+            gap: 6px;
             overflow-x: auto;
             max-width: 100%;
-            padding: 16px 10px 0 10px;
+            padding: 12px 6px 0 6px;
             align-items: flex-end;
         }
         .crayon {
-            width: 34px;
-            height: 70px;
-            border-radius: 4px 4px 0 0;
+            width: 28px;
+            height: 62px;
+            border-radius: 3px 3px 0 0;
             position: relative;
             cursor: pointer;
             transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             flex-shrink: 0;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            box-shadow: 2px 0 4px rgba(0,0,0,0.15);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -193,39 +219,39 @@
         .crayon::before {
             content: '';
             position: absolute;
-            top: -18px;
-            left: 3px;
+            top: -14px;
+            left: 2px;
             width: 0;
             height: 0;
-            border-left: 14px solid transparent;
-            border-right: 14px solid transparent;
-            border-bottom: 18px solid var(--crayon-color);
+            border-left: 12px solid transparent;
+            border-right: 12px solid transparent;
+            border-bottom: 14px solid var(--crayon-color);
             filter: brightness(0.95);
         }
         .crayon-label {
             width: 100%;
-            height: 40px;
-            margin-top: 12px;
+            height: 32px;
+            margin-top: 10px;
             background: rgba(255, 255, 255, 0.78);
-            border-top: 4px solid #2d3436;
-            border-bottom: 4px solid #2d3436;
+            border-top: 3px solid #2d3436;
+            border-bottom: 3px solid #2d3436;
             display: flex;
             align-items: center;
             justify-content: center;
         }
         .crayon-label::after {
             content: '';
-            width: 15px;
-            height: 19px;
+            width: 12px;
+            height: 15px;
             border-radius: 50%;
             background: var(--crayon-color);
         }
         .crayon:hover {
-            transform: translateY(-6px);
+            transform: translateY(-4px);
         }
         .crayon.selected {
-            transform: translateY(-16px) scale(1.05);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+            transform: translateY(-12px) scale(1.05);
+            box-shadow: 0 5px 10px rgba(0,0,0,0.25);
         }
         .crayon.eraser {
             --crayon-color: #ffffff;
@@ -237,10 +263,12 @@
             width: auto;
             height: auto;
             background: none;
-            font-size: 9px;
+            font-size: 8px;
             font-weight: bold;
             color: #333;
         }
+
+        /* 포켓몬 도감 갤러리 모달 */
         .modal-backdrop {
             position: fixed;
             inset: 0;
@@ -385,35 +413,40 @@
 <body>
 
     <div class="header">
-        <h1>🖍️ 크레용 색칠놀이</h1>
+        <h1>🖍️ 포켓몬 크레용 색칠놀이</h1>
         <div class="controls">
-            <button class="btn poke-btn" id="btnOpenPoke">🔴 포켓몬 도감 선택</button>
-            <label class="btn" for="imageLoader">📁 내 사진</label>
-            <input type="file" id="imageLoader" accept="image/*">
+            <button class="btn poke-btn" id="btnOpenPoke">🔴 포켓몬 도감 변경</button>
 
-            <div class="slider-group" title="값에 따라 자잘한 선을 생략하고 굵은 선만 남깁니다">
-                <span>도안 단순화</span>
-                <input type="range" id="simplifySlider" min="20" max="90" value="48">
+            <div class="slider-group" title="선 두께를 조절하여 세밀한 부분을 표현합니다">
+                <span>선 두께</span>
+                <input type="range" id="lineWidthSlider" min="1" max="5" value="2" step="1">
             </div>
 
             <button class="btn active" id="modeFill">🪣 채우기</button>
             <button class="btn" id="modeBrush">🖌️ 브러시</button>
-            <button class="btn shield-on" id="btnBgLock" title="켜두면 배경 및 뚫린 빈 공간엔 칠해지지 않아요">🛡️ 배경 보호 ON</button>
+            <button class="btn shield-on" id="btnBgLock" title="배경 보호">🛡️ 배경보호 ON</button>
             <button class="btn" id="btnUndo">↩️ 되돌리기</button>
-            <button class="btn" id="btnClear">🗑️ 다 지우기</button>
+            <button class="btn" id="btnClear">🗑️ 지우기</button>
             <button class="btn" id="btnSave">💾 저장</button>
         </div>
     </div>
 
     <div class="main-area" id="mainArea">
+        <!-- 원본 컬러 참조 패널 (포켓몬 선택 시에만 표시) -->
+        <div class="reference-panel" id="refPanel" style="display: none;">
+            <h3>참조 모델</h3>
+            <img id="refImg" src="" alt="포켓몬 원본">
+            <div id="refName" style="font-size: 0.8rem; font-weight: bold; margin-top: 5px; color: #333;"></div>
+        </div>
+
         <div class="canvas-wrapper" id="canvasWrapper">
             <div class="empty-guide" id="emptyGuide">
                 <span>🎨</span>
-                <p>포켓몬 도감에서 좋아하는 포켓몬을 고르거나<br>내 사진을 불러와 색칠놀이를 시작하세요!</p>
+                <p>포켓몬 도감을 열어서<br>색칠할 포켓몬을 골라보세요!</p>
                 <button class="guide-cta" id="btnGuidePoke">🔴 포켓몬 도감 열기</button>
             </div>
-            <canvas id="paintCanvas" width="600" height="450"></canvas>
-            <canvas id="lineCanvas" width="600" height="450"></canvas>
+            <canvas id="paintCanvas" width="550" height="420"></canvas>
+            <canvas id="lineCanvas" width="550" height="420"></canvas>
         </div>
     </div>
 
@@ -421,14 +454,15 @@
         <div class="crayon-box" id="crayonBox"></div>
     </div>
 
-    <div class="modal-backdrop" id="pokeModal">
+    <!-- 포켓몬 도감 갤러리 모달 -->
+    <div class="modal-backdrop open" id="pokeModal">
         <div class="modal-box">
             <div class="modal-header">
-                <h2>🔴 포켓몬 도감 갤러리 (터치하면 도안으로 변환!)</h2>
+                <h2>🔴 포켓몬 도감 갤러리 (원하는 포켓몬 선택!)</h2>
                 <button class="close-btn" id="btnClosePoke">✕</button>
             </div>
             <div class="modal-filters">
-                <input type="text" class="search-input" id="pokeSearch" placeholder="포켓몬 이름 또는 번호 검색 (예: 피카츄, 레쿠쟈, 384)">
+                <input type="text" class="search-input" id="pokeSearch" placeholder="포켓몬 이름 또는 번호 검색 (예: 피카츄, 레쿠쟈)">
                 <div class="gen-tabs" id="genTabs">
                     <button class="gen-tab active" data-range="popular">인기 전설·스타팅</button>
                     <button class="gen-tab" data-range="1-151">1세대 (관동)</button>
@@ -450,28 +484,43 @@
         const lineCanvas = document.getElementById('lineCanvas');
         const lineCtx = lineCanvas.getContext('2d', { willReadFrequently: true });
         const emptyGuide = document.getElementById('emptyGuide');
+        const refPanel = document.getElementById('refPanel');
+        const refImg = document.getElementById('refImg');
+        const refName = document.getElementById('refName');
 
-        const imageLoader = document.getElementById('imageLoader');
-        const simplifySlider = document.getElementById('simplifySlider');
+        const lineWidthSlider = document.getElementById('lineWidthSlider');
         const crayonBox = document.getElementById('crayonBox');
 
+        // 확장된 28가지 크레용 색상표
         const colors = [
+            { name: '진빨강', hex: '#d63031' },
             { name: '빨강', hex: '#ff3b30' },
             { name: '다홍', hex: '#ff6b35' },
             { name: '주황', hex: '#ff9500' },
+            { name: '귤색', hex: '#ffa801' },
             { name: '노랑', hex: '#ffcc00' },
+            { name: '레몬', hex: '#ffeaa7' },
             { name: '연두', hex: '#8ce99a' },
             { name: '초록', hex: '#28cd41' },
+            { name: '진초록', hex: '#00b894' },
             { name: '민트', hex: '#00c7be' },
+            { name: '청록', hex: '#00cec9' },
             { name: '하늘', hex: '#5ac8fa' },
             { name: '파랑', hex: '#007aff' },
             { name: '남색', hex: '#364fc7' },
+            { name: '진청', hex: '#0984e3' },
             { name: '보라', hex: '#af52de' },
+            { name: '진보라', hex: '#6c5ce7' },
             { name: '분홍', hex: '#ff2d55' },
+            { name: '연분홍', hex: '#fd79a8' },
             { name: '살구', hex: '#ffd8be' },
+            { name: '황토', hex: '#e17055' },
             { name: '갈색', hex: '#8d5524' },
+            { name: '진갈색', hex: '#63320f' },
             { name: '회색', hex: '#8e8e93' },
-            { name: '검정', hex: '#2c2c2e' }
+            { name: '연회색', hex: '#b2bec3' },
+            { name: '검정', hex: '#2c2c2e' },
+            { name: '차콜', hex: '#b8b8b8' }
         ];
 
         let currentColor = colors[0].hex;
@@ -546,42 +595,37 @@
             historyStack.push(paintCtx.getImageData(0, 0, paintCanvas.width, paintCanvas.height));
         }
 
-        imageLoader.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                loadExternalImage(event.target.result);
-            };
-            reader.readAsDataURL(file);
-        });
-
-        function loadExternalImage(src) {
+        function loadPokemon(url, nameStr) {
             const img = new Image();
             img.crossOrigin = 'Anonymous';
             img.onload = () => {
                 loadedImg = img;
                 emptyGuide.style.display = 'none';
+                
+                // 좌측 참조 패널에 원본 이미지 반영
+                refImg.src = url;
+                refName.textContent = nameStr;
+                refPanel.style.display = 'flex';
+
                 fitAndProcessImage();
             };
             img.onerror = () => {
-                alert('이미지를 불러오는 중 오류가 발생했습니다. 다른 포켓몬을 선택해 주세요.');
+                alert('이미지를 불러오지 못했습니다.');
             };
-            img.src = src;
+            img.src = url;
         }
 
-        simplifySlider.addEventListener('input', () => {
+        lineWidthSlider.addEventListener('input', () => {
             if (loadedImg) processLineArt();
         });
 
         function fitAndProcessImage() {
-            const mainArea = document.getElementById('mainArea');
-            const maxW = mainArea.clientWidth - 32;
-            const maxH = mainArea.clientHeight - 32;
+            const maxW = 500;
+            const maxH = 400;
 
             let w = loadedImg.width;
             let h = loadedImg.height;
-            const ratio = Math.min(maxW / w, maxH / h, 1.3);
+            const ratio = Math.min(maxW / w, maxH / h, 1.2);
             w = Math.floor(w * ratio);
             h = Math.floor(h * ratio);
 
@@ -602,7 +646,7 @@
             tempCanvas.width = w;
             tempCanvas.height = h;
             const tCtx = tempCanvas.getContext('2d');
-            const pad = 12;
+            const pad = 10;
             tCtx.drawImage(loadedImg, pad, pad, w - pad * 2, h - pad * 2);
 
             const srcData = tCtx.getImageData(0, 0, w, h).data;
@@ -622,48 +666,9 @@
                 bBuf[i] = srcData[idx + 2] * alpha + 255 * (1 - alpha);
             }
 
-            for (let pass = 0; pass < 3; pass++) {
-                const nextR = new Float32Array(total);
-                const nextG = new Float32Array(total);
-                const nextB = new Float32Array(total);
-                const colorSigma = 55;
-
-                for (let y = 0; y < h; y++) {
-                    for (let x = 0; x < w; x++) {
-                        const pos = y * w + x;
-                        const cr = rBuf[pos], cg = gBuf[pos], cb = bBuf[pos];
-                        let sumR = 0, sumG = 0, sumB = 0, wSum = 0;
-
-                        for (let dy = -2; dy <= 2; dy++) {
-                            const ny = y + dy;
-                            if (ny < 0 || ny >= h) continue;
-                            for (let dx = -2; dx <= 2; dx++) {
-                                const nx = x + dx;
-                                if (nx < 0 || nx >= w) continue;
-                                const nPos = ny * w + nx;
-                                const dr = rBuf[nPos] - cr;
-                                const dg = gBuf[nPos] - cg;
-                                const db = bBuf[nPos] - cb;
-                                const colorDist = Math.sqrt(dr * dr + dg * dg + db * db);
-
-                                if (colorDist < colorSigma) {
-                                    const weight = 1 - (colorDist / colorSigma);
-                                    sumR += rBuf[nPos] * weight;
-                                    sumG += gBuf[nPos] * weight;
-                                    sumB += bBuf[nPos] * weight;
-                                    wSum += weight;
-                                }
-                            }
-                        }
-                        nextR[pos] = sumR / wSum;
-                        nextG[pos] = sumG / wSum;
-                        nextB[pos] = sumB / wSum;
-                    }
-                }
-                rBuf = nextR; gBuf = nextG; bBuf = nextB;
-            }
-
-            const edgeThreshold = parseInt(simplifySlider.value, 10) * 3.5;
+            // 세밀한 표현을 위해 엣지 추출 강도 조절 (슬라이더 값 연동)
+            const sliderVal = parseInt(lineWidthSlider.value, 10);
+            const edgeThreshold = sliderVal * 18 + 15; // 세밀할수록 낮은 임계값으로 미세한 선도 보존
             const rawBinary = new Uint8Array(total);
 
             for (let y = 1; y < h - 1; y++) {
@@ -685,16 +690,17 @@
                     }
 
                     const lum = 0.299 * rBuf[pos] + 0.587 * gBuf[pos] + 0.114 * bBuf[pos];
-                    if (maxGrad > edgeThreshold || lum < 55) {
+                    if (maxGrad > edgeThreshold || lum < 50) {
                         rawBinary[pos] = 1;
                     }
                 }
             }
 
+            // 자잘한 노이즈 제거 (슬라이더가 얇을수록 잡티 허용 범위 줄임)
             const visited = new Uint8Array(total);
             const cleanBinary = new Uint8Array(total);
             const compQueue = new Int32Array(total);
-            const minComponentSize = 45;
+            const minComponentSize = Math.max(10, sliderVal * 8);
 
             for (let i = 0; i < total; i++) {
                 if (rawBinary[i] === 1 && visited[i] === 0) {
@@ -730,54 +736,25 @@
                 }
             }
 
-            const lineFloat = new Float32Array(total);
-            for (let i = 0; i < total; i++) lineFloat[i] = cleanBinary[i] ? 255 : 0;
-
-            const smoothLine = new Float32Array(total);
-            const blurR = 2;
-            for (let y = 0; y < h; y++) {
-                for (let x = 0; x < w; x++) {
-                    let sum = 0, cnt = 0;
-                    for (let dy = -blurR; dy <= blurR; dy++) {
-                        const ny = y + dy;
-                        if (ny < 0 || ny >= h) continue;
-                        for (let dx = -blurR; dx <= blurR; dx++) {
-                            const nx = x + dx;
-                            if (nx < 0 || nx >= w) continue;
-                            sum += lineFloat[ny * w + nx];
-                            cnt++;
-                        }
-                    }
-                    smoothLine[y * w + x] = sum / cnt;
-                }
-            }
-
             const outImg = lineCtx.createImageData(w, h);
             const out = outImg.data;
             closedEdgeMap = new Uint8Array(total);
 
             for (let i = 0; i < total; i++) {
-                const v = smoothLine[i];
-                const idx = i * 4;
-                if (v >= 95) {
+                if (cleanBinary[i] === 1) {
+                    const idx = i * 4;
                     out[idx] = 25;
                     out[idx + 1] = 25;
                     out[idx + 2] = 28;
                     out[idx + 3] = 255;
                     closedEdgeMap[i] = 1;
-                } else if (v > 30) {
-                    const alpha = Math.round(((v - 30) / 65) * 255);
-                    out[idx] = 25;
-                    out[idx + 1] = 25;
-                    out[idx + 2] = 28;
-                    out[idx + 3] = alpha;
-                    if (v >= 65) closedEdgeMap[i] = 1;
                 } else {
                     out[idx + 3] = 0;
                 }
             }
             lineCtx.putImageData(outImg, 0, 0);
 
+            // 배경 마스크 생성
             backgroundMask = new Uint8Array(total);
             const queue = new Int32Array(total);
             let head = 0, tail = 0;
@@ -813,37 +790,9 @@
                 }
             }
 
-            let bgR = 255, bgG = 255, bgB = 255, bgCount = 0;
-            let sumBgR = 0, sumBgG = 0, sumBgB = 0;
-            let hasTransparentBg = false;
-
             for (let i = 0; i < total; i++) {
-                if (backgroundMask[i] === 1) {
-                    if (alphaBuf[i] < 50) hasTransparentBg = true;
-                    const idx = i * 4;
-                    sumBgR += srcData[idx];
-                    sumBgG += srcData[idx + 1];
-                    sumBgB += srcData[idx + 2];
-                    bgCount++;
-                }
-            }
-            if (bgCount > 0) {
-                bgR = sumBgR / bgCount;
-                bgG = sumBgG / bgCount;
-                bgB = sumBgB / bgCount;
-            }
-
-            const isCleanWhiteBg = (bgR > 245 && bgG > 245 && bgB > 245);
-            for (let i = 0; i < total; i++) {
-                if (backgroundMask[i] === 0 && closedEdgeMap[i] === 0) {
-                    if (hasTransparentBg && alphaBuf[i] < 50) {
-                        backgroundMask[i] = 1;
-                    } else if (isCleanWhiteBg) {
-                        const idx = i * 4;
-                        if (srcData[idx] >= 250 && srcData[idx + 1] >= 250 && srcData[idx + 2] >= 250) {
-                            backgroundMask[i] = 1;
-                        }
-                    }
+                if (backgroundMask[i] === 0 && closedEdgeMap[i] === 0 && alphaBuf[i] < 50) {
+                    backgroundMask[i] = 1;
                 }
             }
         }
@@ -880,7 +829,7 @@
             const visited = new Uint8Array(w * h);
             const stack = [startPos];
             visited[startPos] = 1;
-            const tolerance = 30;
+            const tolerance = 25;
 
             while (stack.length > 0) {
                 const pos = stack.pop();
@@ -927,7 +876,7 @@
             const w = paintCanvas.width;
             const h = paintCanvas.height;
             const [r, g, b] = hexToRgb(currentColor);
-            const brushRadius = 11;
+            const brushRadius = 8;
 
             const imgData = paintCtx.getImageData(0, 0, w, h);
             const data = imgData.data;
@@ -1031,10 +980,10 @@
             protectBackground = !protectBackground;
             if (protectBackground) {
                 btnBgLock.classList.add('shield-on');
-                btnBgLock.textContent = '🛡️ 배경 보호 ON';
+                btnBgLock.textContent = '🛡️ 배경보호 ON';
             } else {
                 btnBgLock.classList.remove('shield-on');
-                btnBgLock.textContent = '🛡️ 배경 보호 OFF';
+                btnBgLock.textContent = '🛡️ 배경보호 OFF';
             }
         });
 
@@ -1062,7 +1011,7 @@
             mCtx.drawImage(lineCanvas, 0, 0);
 
             const link = document.createElement('a');
-            link.download = '나만의_크레용_색칠작품.png';
+            link.download = '포켓몬_색칠놀이_작품.png';
             link.href = merged.toDataURL('image/png');
             link.click();
         });
@@ -1079,18 +1028,20 @@
         async function fetchKoreanName(id, nameEl) {
             if (koNameCache[id]) {
                 nameEl.textContent = koNameCache[id];
-                return;
+                return koNameCache[id];
             }
             try {
                 const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
-                if (!res.ok) return;
+                if (!res.ok) return `#${id}`;
                 const data = await res.json();
                 const koObj = data.names.find(n => n.language.name === 'ko');
                 if (koObj) {
                     koNameCache[id] = koObj.name;
                     nameEl.textContent = koObj.name;
+                    return koObj.name;
                 }
             } catch (e) {}
+            return `#${id}`;
         }
 
         async function ensureSpeciesList() {
@@ -1132,9 +1083,10 @@
                 card.appendChild(imgEl);
                 card.appendChild(nameEl);
 
-                card.addEventListener('click', () => {
+                card.addEventListener('click', async () => {
                     pokeModal.classList.remove('open');
-                    loadExternalImage(getOfficialArtworkUrl(item.id));
+                    const koName = koNameCache[item.id] || await fetchKoreanName(item.id, nameEl);
+                    loadPokemon(getOfficialArtworkUrl(item.id), koName);
                 });
 
                 pokeGrid.appendChild(card);
