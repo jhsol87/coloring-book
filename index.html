@@ -94,7 +94,7 @@
             width: 65px;
         }
 
-        /* 메인 작업 영역: TV/태블릿 가로 화면 1:1 분할 최적화 */
+        /* 메인 작업 영역 */
         .main-area {
             flex: 1;
             display: flex;
@@ -107,7 +107,7 @@
             gap: 16px;
         }
 
-        /* 좌측 원본 패널 (1:1 비율로 큼직하게) */
+        /* 좌측 원본 패널 */
         .reference-panel {
             flex: 1;
             max-width: 50%;
@@ -139,7 +139,7 @@
             flex-shrink: 0;
         }
 
-        /* 우측 색칠 뷰포트 패널 (1:1 비율로 큼직하게 + 줌/팬 지원) */
+        /* 우측 색칠 뷰포트 패널 */
         .paint-panel {
             flex: 1;
             max-width: 50%;
@@ -193,7 +193,7 @@
             pointer-events: none;
         }
 
-        /* 줌 플로팅 컨트롤 (+ / - / 100% 리셋) */
+        /* 줌 플로팅 컨트롤 */
         .zoom-controls {
             position: absolute;
             bottom: 12px;
@@ -621,7 +621,7 @@
             <div id="refName"></div>
         </div>
 
-        <!-- 우측 1:1 색칠 영역 (확대/축소 및 이동 지원) -->
+        <!-- 우측 1:1 색칠 영역 -->
         <div class="paint-panel full-width" id="paintPanel">
             <div class="empty-guide" id="emptyGuide">
                 <span>🎨</span>
@@ -636,7 +636,6 @@
                 </div>
             </div>
 
-            <!-- 확대/축소 컨트롤 -->
             <div class="zoom-controls" id="zoomControls" style="display: none;">
                 <button class="zoom-btn" id="btnZoomOut" title="축소">−</button>
                 <span class="zoom-label" id="zoomLabel" title="터치하면 100%로 초기화">100%</span>
@@ -655,15 +654,14 @@
         <div class="spinner-text" id="spinnerText">도안 그리는 중...</div>
     </div>
 
-    <!-- 통합 캐릭터 갤러리 모달 -->
-    <div class="modal-backdrop open" id="pokeModal">
+    <!-- 통합 캐릭터 갤러리 모달 (초기 진입 시 닫힌 상태로 시작해 먹통 방지) -->
+    <div class="modal-backdrop" id="pokeModal">
         <div class="modal-box">
             <div class="modal-header">
                 <h2>🎨 캐릭터 도감 갤러리 (터치하면 색칠 도안으로 변환!)</h2>
                 <button class="close-btn" id="btnClosePoke">✕</button>
             </div>
 
-            <!-- 세계관 선택 탭 -->
             <div class="world-tabs" id="worldTabs">
                 <button class="world-tab active" data-world="pokemon">🔴 포켓몬</button>
                 <button class="world-tab" data-world="mario">🍄 슈퍼마리오</button>
@@ -782,67 +780,80 @@
             888: '자시안', 1007: '코라이돈', 1008: '미라이돈'
         };
 
-        // 마리오 & 동물의 숲 한글 이름 매핑
+        // 마리오 & 동물의 숲 한글 이름 매핑 (따옴표 이스케이프 안전 처리)
         const nintendoKoNames = {
-            'Mario': '마리오', 'Luigi': '루이지', 'Peach': '피치공주', 'Daisy': '데이지공주',
-            'Yoshi': '요시', 'Toad': '키노피오', 'Bowser': '쿠파', 'Bowser Jr.': '쿠파주니어',
-            'Rosalina': '로젤리나', 'Wario': '와리오', 'Waluigi': '와루이지', 'Donkey Kong': '동키콩',
-            'Diddy Kong': '디디콩', 'Boo': '부끄부끄', 'Koopa Troopa': '엉금엉금', 'Goomba': '굼바',
-            'Piranha Plant': '뻐끔플라워', 'Shy Guy': '헤이호', 'Kamek': '마귀', 'Pauline': '폴린',
-            'Cat Mario': '고양이 마리오', 'Cat Peach': '고양이 피치', 'Dr. Mario': '닥터 마리오',
-            'Isabelle': '여울', 'Tom Nook': '너굴', 'Timmy & Tommy': '콩돌이 & 밤돌이',
-            'K.K.': 'K.K. (토타케케)', 'Mabel': '고순이', 'Sable': '고옥이', 'Label': '고숙이',
-            'Blathers': '부엉', 'Celeste': '부옥', 'Resetti': '도루묵씨', 'Rover': '낯선고양이',
-            'Kapp'n': '갑돌', 'Cyrus': '리포', 'Reese': '리사', 'Digby': '켄트', 'Lottie': '솜이',
-            'Raymond': '잭슨', 'Marshal': '쭈니', 'Judy': '미애', 'Ankha': '클레오', 'Dom': '차둘',
-            'Audie': '모니카', 'Sherb': '래미', 'Stitches': '패치', 'Fauna': '솔미', 'Bob': '히죽',
-            'Merengue': '스트로베리', 'Marina': '문리나', 'Zucker': '탁호', 'Octavian': '문복',
-            'Beau': '피터', 'Maple': '메이첼', 'Molly': '귀오미', 'Rosie': '부케', 'Goldie': '카라멜',
-            'Apollo': '아폴로', 'Bunnie': '릴리안', 'Chrissy': '크리스틴', 'Francine': '프랑소와',
-            'Flick': '레온', 'C.J.': '저스틴', 'Orville': '모리', 'Wilbur': '로드리'
+            "Mario": "마리오", "Luigi": "루이지", "Peach": "피치공주", "Daisy": "데이지공주",
+            "Yoshi": "요시", "Toad": "키노피오", "Bowser": "쿠파", "Bowser Jr.": "쿠파주니어",
+            "Rosalina": "로젤리나", "Wario": "와리오", "Waluigi": "와루이지", "Donkey Kong": "동키콩",
+            "Diddy Kong": "디디콩", "Boo": "부끄부끄", "Koopa Troopa": "엉금엉금", "Goomba": "굼바",
+            "Piranha Plant": "뻐끔플라워", "Shy Guy": "헤이호", "Kamek": "마귀", "Pauline": "폴린",
+            "Cat Mario": "고양이 마리오", "Cat Peach": "고양이 피치", "Dr. Mario": "닥터 마리오",
+            "Isabelle": "여울", "Tom Nook": "너굴", "Timmy & Tommy": "콩돌이 & 밤돌이",
+            "K.K.": "K.K. (토타케케)", "Mabel": "고순이", "Sable": "고옥이", "Label": "고숙이",
+            "Blathers": "부엉", "Celeste": "부옥", "Resetti": "도루묵씨", "Rover": "낯선고양이",
+            "Kapp'n": "갑돌", "Cyrus": "리포", "Reese": "리사", "Digby": "켄트", "Lottie": "솜이",
+            "Raymond": "잭슨", "Marshal": "쭈니", "Judy": "미애", "Ankha": "클레오", "Dom": "차둘",
+            "Audie": "모니카", "Sherb": "래미", "Stitches": "패치", "Fauna": "솔미", "Bob": "히죽",
+            "Merengue": "스트로베리", "Marina": "문리나", "Zucker": "탁호", "Octavian": "문복",
+            "Beau": "피터", "Maple": "메이첼", "Molly": "귀오미", "Rosie": "부케", "Goldie": "카라멜",
+            "Apollo": "아폴로", "Bunnie": "릴리안", "Chrissy": "크리스틴", "Francine": "프랑소와",
+            "Flick": "레온", "C.J.": "저스틴", "Orville": "모리", "Wilbur": "로드리"
         };
 
-        // 디즈니 대표 인기 캐릭터 큐레이션 (한글명 + 검색키워드)
+        // 디즈니 대표 인기 캐릭터 큐레이션
         const disneyCurated = [
-            { ko: '미키 마우스', q: 'Mickey Mouse' },
-            { ko: '미니 마우스', q: 'Minnie Mouse' },
-            { ko: '도널드 덕', q: 'Donald Duck' },
-            { ko: '구피', q: 'Goofy' },
-            { ko: '플루토', q: 'Pluto' },
-            { ko: '곰돌이 푸', q: 'Winnie the Pooh' },
-            { ko: '티거', q: 'Tigger' },
-            { ko: '피글렛', q: 'Piglet' },
-            { ko: '스티치', q: 'Stitch' },
-            { ko: '엘사', q: 'Elsa' },
-            { ko: '안나', q: 'Anna' },
-            { ko: '올라프', q: 'Olaf' },
-            { ko: '신데렐라', q: 'Cinderella' },
-            { ko: '백설공주', q: 'Snow White' },
-            { ko: '에리얼 (인어공주)', q: 'Ariel' },
-            { ko: '벨 (미녀와 야수)', q: 'Belle' },
-            { ko: '라푼젤', q: 'Rapunzel' },
-            { ko: '자스민', q: 'Jasmine' },
-            { ko: '모아나', q: 'Moana' },
-            { ko: '우디', q: 'Woody' },
-            { ko: '버즈 라이트이어', q: 'Buzz Lightyear' },
-            { ko: '알린', q: 'Alien' },
-            { ko: '심바', q: 'Simba' },
-            { ko: '덤보', q: 'Dumbo' },
-            { ko: '밤비', q: 'Bambi' },
-            { ko: '주디 홉스', q: 'Judy Hopps' },
-            { ko: '닉 와일드', q: 'Nick Wilde' },
-            { ko: '설리반', q: 'Sulley' },
-            { ko: '마이크 와조스키', q: 'Mike Wazowski' },
-            { ko: '베이맥스', q: 'Baymax' },
-            { ko: '라이트닝 맥퀸', q: 'Lightning McQueen' },
-            { ko: '니모', q: 'Nemo' },
-            { ko: '도리', q: 'Dory' },
-            { ko: '피터팬', q: 'Peter Pan' },
-            { ko: '팅커벨', q: 'Tinker Bell' },
-            { ko: '알라딘', q: 'Aladdin' },
-            { ko: '지니', q: 'Genie' },
-            { ko: '마리 (아리스토캣)', q: 'Marie' }
+            { ko: "미키 마우스", q: "Mickey Mouse" },
+            { ko: "미니 마우스", q: "Minnie Mouse" },
+            { ko: "도널드 덕", q: "Donald Duck" },
+            { ko: "구피", q: "Goofy" },
+            { ko: "플루토", q: "Pluto" },
+            { ko: "곰돌이 푸", q: "Winnie the Pooh" },
+            { ko: "티거", q: "Tigger" },
+            { ko: "피글렛", q: "Piglet" },
+            { ko: "스티치", q: "Stitch" },
+            { ko: "엘사", q: "Elsa" },
+            { ko: "안나", q: "Anna" },
+            { ko: "올라프", q: "Olaf" },
+            { ko: "신데렐라", q: "Cinderella" },
+            { ko: "백설공주", q: "Snow White" },
+            { ko: "에리얼 (인어공주)", q: "Ariel" },
+            { ko: "벨 (미녀와 야수)", q: "Belle" },
+            { ko: "라푼젤", q: "Rapunzel" },
+            { ko: "자스민", q: "Jasmine" },
+            { ko: "모아나", q: "Moana" },
+            { ko: "우디", q: "Woody" },
+            { ko: "버즈 라이트이어", q: "Buzz Lightyear" },
+            { ko: "알린", q: "Alien" },
+            { ko: "심바", q: "Simba" },
+            { ko: "덤보", q: "Dumbo" },
+            { ko: "밤비", q: "Bambi" },
+            { ko: "주디 홉스", q: "Judy Hopps" },
+            { ko: "닉 와일드", q: "Nick Wilde" },
+            { ko: "설리반", q: "Sulley" },
+            { ko: "마이크 와조스키", q: "Mike Wazowski" },
+            { ko: "베이맥스", q: "Baymax" },
+            { ko: "라이트닝 맥퀸", q: "Lightning McQueen" },
+            { ko: "니모", q: "Nemo" },
+            { ko: "도리", q: "Dory" },
+            { ko: "피터팬", q: "Peter Pan" },
+            { ko: "팅커벨", q: "Tinker Bell" },
+            { ko: "알라딘", q: "Aladdin" },
+            { ko: "지니", q: "Genie" },
+            { ko: "마리 (아리스토캣)", q: "Marie" }
         ];
+
+        // 타임아웃 포함 안전 fetch 헬퍼
+        async function safeFetchJson(url, timeoutMs = 6500) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const res = await fetch(url, { signal: controller.signal });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return await res.json();
+            } finally {
+                clearTimeout(timer);
+            }
+        }
 
         function showSpinner(msg = '도안 그리는 중...') {
             spinnerText.textContent = msg;
@@ -972,13 +983,12 @@
             };
 
             img.onerror = () => {
-                // 일부 외부 서버(디즈니 등) CORS 헤더 누락 시 프록시 폴백 시도
                 if (!url.includes('wsrv.nl')) {
                     const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=png`;
                     loadCharacterImage(proxyUrl, nameStr);
                 } else {
                     hideSpinner();
-                    alert('이 캐릭터 이미지는 보안 정책으로 불러올 수 없습니다. 다른 캐릭터를 선택해 주세요!');
+                    alert('이 캐릭터 이미지는 불러올 수 없습니다. 다른 캐릭터를 선택해 주세요!');
                 }
             };
 
@@ -1595,7 +1605,7 @@
             });
         }
 
-        // 1) 포켓몬 로더
+        // 1) 포켓몬 로더 (인기 목록은 API 대기 없이 즉시 렌더링)
         function getOfficialArtworkUrl(id) {
             return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
         }
@@ -1606,9 +1616,7 @@
                 return koNameCache[id];
             }
             try {
-                const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
-                if (!res.ok) return `#${id}`;
-                const data = await res.json();
+                const data = await safeFetchJson(`https://pokeapi.co/api/v2/pokemon-species/${id}`, 4000);
                 const koObj = data.names.find(n => n.language.name === 'ko');
                 if (koObj) {
                     koNameCache[id] = koObj.name;
@@ -1621,8 +1629,7 @@
 
         async function ensureSpeciesList() {
             if (allSpeciesList) return allSpeciesList;
-            const res = await fetch('https://pokeapi.co/api/v2/pokemon-species?limit=1025');
-            const data = await res.json();
+            const data = await safeFetchJson('https://pokeapi.co/api/v2/pokemon-species?limit=1025', 6000);
             allSpeciesList = data.results.map((item, idx) => ({
                 id: idx + 1,
                 enName: item.name
@@ -1631,6 +1638,16 @@
         }
 
         async function loadPokemonWorld(rangeKey, query = '') {
+            if (!query && rangeKey === 'popular') {
+                renderGenericCards(popularPokemonIds.map(id => ({
+                    pokeId: id,
+                    badge: `No.${String(id).padStart(3, '0')}`,
+                    name: koNameCache[id] || `#${id}`,
+                    img: getOfficialArtworkUrl(id)
+                })));
+                return;
+            }
+
             pokeGrid.innerHTML = '<div class="loading-box">포켓몬 도감을 불러오는 중...</div>';
             try {
                 const list = await ensureSpeciesList();
@@ -1640,8 +1657,6 @@
                         const ko = (koNameCache[p.id] || '').toLowerCase();
                         return String(p.id) === query || ko.includes(query) || p.enName.includes(query);
                     }).slice(0, 60);
-                } else if (rangeKey === 'popular') {
-                    filtered = popularPokemonIds.map(id => list.find(p => p.id === id)).filter(Boolean);
                 } else {
                     const [start, end] = rangeKey.split('-').map(Number);
                     filtered = list.filter(p => p.id >= start && p.id <= end);
@@ -1654,17 +1669,16 @@
                     img: getOfficialArtworkUrl(p.id)
                 })));
             } catch (e) {
-                pokeGrid.innerHTML = '<div class="loading-box">포켓몬 목록을 불러오지 못했습니다.</div>';
+                pokeGrid.innerHTML = '<div class="loading-box">포켓몬 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.</div>';
             }
         }
 
-        // 2) 슈퍼마리오 로더 (AmiiboAPI)
+        // 2) 슈퍼마리오 로더
         async function loadMarioWorld(subKey, query = '') {
             pokeGrid.innerHTML = '<div class="loading-box">슈퍼마리오 친구들을 불러오는 중...</div>';
             try {
                 if (!marioCache) {
-                    const res = await fetch('https://www.amiiboapi.com/api/amiibo/?gameseries=Super%20Mario');
-                    const data = await res.json();
+                    const data = await safeFetchJson('https://www.amiiboapi.com/api/amiibo/?gameseries=Super%20Mario', 7000);
                     const seen = new Set();
                     marioCache = [];
                     (data.amiibo || []).forEach(item => {
@@ -1694,17 +1708,16 @@
 
                 renderGenericCards(list);
             } catch (e) {
-                pokeGrid.innerHTML = '<div class="loading-box">슈퍼마리오 목록을 불러오지 못했습니다.</div>';
+                pokeGrid.innerHTML = '<div class="loading-box">슈퍼마리오 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.</div>';
             }
         }
 
-        // 3) 동물의 숲 로더 (AmiiboAPI)
+        // 3) 동물의 숲 로더
         async function loadACWorld(subKey, query = '') {
             pokeGrid.innerHTML = '<div class="loading-box">동물의 숲 주민들을 불러오는 중...</div>';
             try {
                 if (!acCache) {
-                    const res = await fetch('https://www.amiiboapi.com/api/amiibo/?gameseries=Animal%20Crossing');
-                    const data = await res.json();
+                    const data = await safeFetchJson('https://www.amiiboapi.com/api/amiibo/?gameseries=Animal%20Crossing', 7000);
                     const seen = new Set();
                     acCache = [];
                     (data.amiibo || []).forEach(item => {
@@ -1742,19 +1755,18 @@
 
                 renderGenericCards(list);
             } catch (e) {
-                pokeGrid.innerHTML = '<div class="loading-box">동물의 숲 목록을 불러오지 못했습니다.</div>';
+                pokeGrid.innerHTML = '<div class="loading-box">동물의 숲 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.</div>';
             }
         }
 
-        // 4) 디즈니 로더 (Disney API)
+        // 4) 디즈니 로더 (동시 폭주 방지를 위해 6개씩 순차 배치 조회)
         async function loadDisneyWorld(subKey, query = '') {
             pokeGrid.innerHTML = '<div class="loading-box">디즈니 친구들을 불러오는 중...</div>';
             try {
                 if (query) {
                     const mapped = disneyCurated.find(d => d.ko.includes(query));
                     const searchTerm = mapped ? mapped.q : query;
-                    const res = await fetch(`https://api.disneyapi.dev/character?name=${encodeURIComponent(searchTerm)}`);
-                    const json = await res.json();
+                    const json = await safeFetchJson(`https://api.disneyapi.dev/character?name=${encodeURIComponent(searchTerm)}`, 6000);
                     const arr = Array.isArray(json.data) ? json.data : (json.data ? [json.data] : []);
                     const valid = arr.filter(c => c.imageUrl).slice(0, 40).map(c => ({
                         name: mapped ? mapped.ko : c.name,
@@ -1766,27 +1778,31 @@
                 }
 
                 if (!disneyCache) {
-                    const results = await Promise.all(
-                        disneyCurated.map(async (entry) => {
-                            try {
-                                const res = await fetch(`https://api.disneyapi.dev/character?name=${encodeURIComponent(entry.q)}`);
-                                const json = await res.json();
-                                const arr = Array.isArray(json.data) ? json.data : (json.data ? [json.data] : []);
-                                const exact = arr.find(c => c.name.toLowerCase() === entry.q.toLowerCase() && c.imageUrl)
-                                           || arr.find(c => c.imageUrl);
-                                if (!exact) return null;
-                                return {
-                                    name: entry.ko,
-                                    q: entry.q,
-                                    badge: (exact.films && exact.films[0]) || 'Disney',
-                                    img: exact.imageUrl
-                                };
-                            } catch (e) {
-                                return null;
-                            }
-                        })
-                    );
-                    disneyCache = results.filter(Boolean);
+                    disneyCache = [];
+                    const batchSize = 6;
+                    for (let i = 0; i < disneyCurated.length; i += batchSize) {
+                        const slice = disneyCurated.slice(i, i + batchSize);
+                        const batchResults = await Promise.all(
+                            slice.map(async (entry) => {
+                                try {
+                                    const json = await safeFetchJson(`https://api.disneyapi.dev/character?name=${encodeURIComponent(entry.q)}`, 5000);
+                                    const arr = Array.isArray(json.data) ? json.data : (json.data ? [json.data] : []);
+                                    const exact = arr.find(c => c.name.toLowerCase() === entry.q.toLowerCase() && c.imageUrl)
+                                               || arr.find(c => c.imageUrl);
+                                    if (!exact) return null;
+                                    return {
+                                        name: entry.ko,
+                                        q: entry.q,
+                                        badge: (exact.films && exact.films[0]) || 'Disney',
+                                        img: exact.imageUrl
+                                    };
+                                } catch (e) {
+                                    return null;
+                                }
+                            })
+                        );
+                        disneyCache.push(...batchResults.filter(Boolean));
+                    }
                 }
 
                 let list = disneyCache;
@@ -1800,7 +1816,7 @@
 
                 renderGenericCards(list);
             } catch (e) {
-                pokeGrid.innerHTML = '<div class="loading-box">디즈니 목록을 불러오지 못했습니다.</div>';
+                pokeGrid.innerHTML = '<div class="loading-box">디즈니 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.</div>';
             }
         }
 
@@ -1817,7 +1833,6 @@
             }
         }
 
-        // 세계관 탭 클릭
         worldTabs.addEventListener('click', (e) => {
             if (!e.target.classList.contains('world-tab')) return;
             worldTabs.querySelectorAll('.world-tab').forEach(t => t.classList.remove('active'));
@@ -1828,7 +1843,6 @@
             refreshGallery();
         });
 
-        // 세부 분류 탭 클릭
         genTabs.addEventListener('click', (e) => {
             if (!e.target.classList.contains('gen-tab')) return;
             genTabs.querySelectorAll('.gen-tab').forEach(t => t.classList.remove('active'));
@@ -1861,11 +1875,9 @@
             if (e.target === pokeModal) pokeModal.classList.remove('open');
         });
 
-        // 초기 실행
+        // 초기 실행: UI만 즉시 렌더링하고 외부 API는 갤러리를 열 때 호출
         initPalette();
         clearPaintCanvas();
-        renderSubTabs('pokemon');
-        refreshGallery();
     </script>
 </body>
 </html>
